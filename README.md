@@ -30,3 +30,6 @@ sudo systemctl start signage-player
 
 # 7. Check status
 sudo systemctl status signage-player
+
+# 8. Watchdog
+tail -f ~/signage/logs/player.log
