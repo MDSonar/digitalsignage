@@ -21,6 +21,8 @@ app = Flask(__name__)
 
 CONFIG_FILE = Path.home() / 'signage' / 'config.json'
 
+PLAYLIST_JSON = Path.home() / 'signage' / 'playlist.json'
+
 VIDEOS_DIR = Path.home() / 'signage' / 'content' / 'videos'
 PRESENTATIONS_DIR = Path.home() / 'signage' / 'content' / 'presentations'
 SLIDES_CACHE_DIR = Path.home() / 'signage' / 'cache' / 'slides'
@@ -55,23 +57,60 @@ def get_playlist():
     except Exception:
         mode = 'both'
 
-    for video in get_video_files():
-        if mode in ('both', 'video'):
-            playlist.append({
-            'type': 'video',
-            'url': f'/content/videos/{video.name}',
-            'name': video.name
-            })
-    
-    for slide in get_slide_files():
-        if mode in ('both', 'presentation'):
-            relative_path = slide.relative_to(SLIDES_CACHE_DIR)
-            playlist.append({
-            'type': 'image',
-            'url': f'/content/slides/{relative_path.as_posix()}',
-            'name': slide.name,
-            'duration': SLIDE_DURATION
-            })
+    # If a JSON playlist exists, honor it (selected filenames). It should be a list of filenames
+    # (videos or presentation filenames). Presentations are expanded to their cached slides.
+    selected = []
+    try:
+        if PLAYLIST_JSON.exists():
+            data = json.loads(PLAYLIST_JSON.read_text())
+            if isinstance(data, list):
+                selected = data
+    except Exception:
+        logger.exception('Failed to read playlist.json')
+
+    # Build maps
+    video_files = {v.name: v for v in get_video_files()}
+    # slides are stored under SLIDES_CACHE_DIR/<presentation_stem>/slide_*.png
+    if selected:
+        logger.info(f"Using JSON playlist with {len(selected)} entries (web player)")
+        for name in selected:
+            if name in video_files and mode in ('both', 'video'):
+                playlist.append({
+                    'type': 'video',
+                    'url': f'/content/videos/{video_files[name].name}',
+                    'name': video_files[name].name
+                })
+            else:
+                # treat as presentation filename; expand to slides by stem
+                stem = Path(name).stem
+                pres_dir = SLIDES_CACHE_DIR / stem
+                if pres_dir.exists() and pres_dir.is_dir() and mode in ('both', 'presentation'):
+                    for slide in sorted(pres_dir.glob('slide_*.png')):
+                        rel = slide.relative_to(SLIDES_CACHE_DIR)
+                        playlist.append({
+                            'type': 'image',
+                            'url': f'/content/slides/{rel.as_posix()}',
+                            'name': slide.name,
+                            'duration': SLIDE_DURATION
+                        })
+    else:
+        for video in get_video_files():
+            if mode in ('both', 'video'):
+                playlist.append({
+                'type': 'video',
+                'url': f'/content/videos/{video.name}',
+                'name': video.name
+                })
+        
+        for slide in get_slide_files():
+            if mode in ('both', 'presentation'):
+                relative_path = slide.relative_to(SLIDES_CACHE_DIR)
+                playlist.append({
+                'type': 'image',
+                'url': f'/content/slides/{relative_path.as_posix()}',
+                'name': slide.name,
+                'duration': SLIDE_DURATION
+                })
     
     return playlist
 

@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Dashboard - Digital Signage</title>
+    <title>Dashboard - Litmus Signage</title>
 
     <style>
         :root{
@@ -119,6 +119,9 @@
     .preview-video{max-width:220px;max-height:120px;border-radius:8px;display:block;object-fit:cover}
     .preview-icon{width:72px;height:72px;display:flex;align-items:center;justify-content:center;border-radius:12px;background:rgba(15,23,42,0.04);color:var(--muted);font-weight:800}
 
+        /* Playlist checkbox styling */
+        .playlist-checkbox{width:18px;height:18px;cursor:pointer;accent-color:var(--accent)}
+
         /* Mode slider / segmented control */
         .mode-wrap{display:flex;flex-direction:column;gap:8px}
         .segmented{position:relative;display:inline-grid;grid-auto-flow:column;border-radius:999px;padding:4px;background:rgba(15,23,42,0.04);gap:6px;align-items:center}
@@ -166,10 +169,10 @@
 </head>
 <body>
 <div class="container">
-    <div class="app" role="application" aria-label="Digital Signage Dashboard">
+    <div class="app" role="application" aria-label="Litmus Signage Dashboard">
         <header>
             <div>
-                <h1>🖥️ Digital Signage Dashboard</h1>
+                <h1>🖥️ Litmus Signage Dashboard</h1>
                 <div class="user-info">Logged in as: {{ username }}</div>
             </div>
             <a href="{{ url_for('logout') }}" class="logout-btn" aria-label="Logout">Logout</a>
@@ -327,9 +330,12 @@
                         {% if videos %}
                             {% for file in videos %}
                                 <div class="file-item" role="listitem">
-                                    <div class="file-info">
-                                        <div class="file-name">{{ file.name }}</div>
-                                        <div class="file-size">{{ file.size }}</div>
+                                    <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
+                                        <input type="checkbox" class="playlist-checkbox" data-filename="{{ file.name }}" data-content-type="video" {% if file.in_playlist %}checked{% endif %} aria-label="Add {{ file.name }} to playlist">
+                                        <div class="file-info">
+                                            <div class="file-name">{{ file.name }}</div>
+                                            <div class="file-size">{{ file.size }}</div>
+                                        </div>
                                     </div>
                                     <div class="file-actions">
                                         <span class="file-badge">{{ file.name.split('.')[-1]|upper }}</span>
@@ -377,14 +383,17 @@
                         {% if presentations %}
                             {% for file in presentations %}
                                 <div class="file-item" role="listitem">
-                                    <div class="file-info">
-                                        <div class="file-name">
-                                            {{ file.name }}
-                                            {% if file.format %}
-                                                <span class="file-badge badge-{{ file.format|lower }}">{{ file.format }}</span>
-                                            {% endif %}
+                                    <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
+                                        <input type="checkbox" class="playlist-checkbox" data-filename="{{ file.name }}" data-content-type="presentation" {% if file.in_playlist %}checked{% endif %} aria-label="Add {{ file.name }} to playlist">
+                                        <div class="file-info">
+                                            <div class="file-name">
+                                                {{ file.name }}
+                                                {% if file.format %}
+                                                    <span class="file-badge badge-{{ file.format|lower }}">{{ file.format }}</span>
+                                                {% endif %}
+                                            </div>
+                                            <div class="file-size">{{ file.size }}</div>
                                         </div>
-                                        <div class="file-size">{{ file.size }}</div>
                                     </div>
                                     <div class="file-actions">
                                         <span class="file-badge">{{ file.name.split('.')[-1]|upper }}</span>
@@ -699,6 +708,34 @@
                 topProgress.style.width = '0%';
                 // Optionally submit the form normally as fallback (commented out to avoid double-uploads)
                 // form.submit();
+            }
+        });
+    });
+})();
+
+/* Playlist checkbox toggle via AJAX */
+(function(){
+    const checkboxes = document.querySelectorAll('.playlist-checkbox');
+    checkboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', async (e) => {
+            const filename = e.target.dataset.filename;
+            const contentType = e.target.dataset.contentType;
+            
+            try {
+                const response = await fetch(`/control/toggle_playlist/${contentType}/${encodeURIComponent(filename)}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                const data = await response.json();
+                if (!data.ok) {
+                    alert('Failed to update playlist: ' + (data.error || 'Unknown error'));
+                    e.target.checked = !e.target.checked; // revert
+                }
+            } catch (err) {
+                console.error('Playlist toggle error:', err);
+                alert('Error updating playlist');
+                e.target.checked = !e.target.checked; // revert
             }
         });
     });

@@ -33,6 +33,7 @@ VIDEO_FORMATS = ['.mp4', '.avi', '.mov', '.mkv', '.webm']
 PPT_FORMATS = ['.pptx', '.ppt']
 PDF_FORMATS = ['.pdf']
 PLAYLIST_FILE = os.path.expanduser("~/signage/playlist.m3u")
+PLAYLIST_JSON = os.path.expanduser("~/signage/playlist.json")
 CHECK_INTERVAL = 20
 CONFIG_FILE = Path.home() / 'signage' / 'config.json'
 COMMANDS_DIR = Path.home() / 'signage' / 'commands'
@@ -161,21 +162,53 @@ class SmartPlaylistPlayer:
         except Exception:
             mode = 'both'
 
+        # If a JSON playlist exists and contains filenames, honor it (keeps unselected items in storage)
+        selected = []
+        try:
+            if os.path.exists(PLAYLIST_JSON):
+                with open(PLAYLIST_JSON, 'r') as pf:
+                    data = json.load(pf)
+                    if isinstance(data, list):
+                        selected = data
+        except Exception as e:
+            logger.warning(f"Failed to read playlist json: {e}")
+
+        # Build lookup maps for quick file->path resolution
         video_files = self.get_video_files()
-        for video in video_files:
-            if mode in ('both', 'video'):
-                playlist_items.append({'type': 'video', 'path': video, 'duration': -1})
-        logger.info(f"Added {len(video_files)} videos to playlist")
-        
+        video_map = {v.name: v for v in video_files}
         presentation_files = self.get_presentation_files()
+        pres_map = {p.name: p for p in presentation_files}
+
         total_slides = 0
-        for presentation_file in presentation_files:
-            if mode in ('both', 'presentation'):
-                slides = self.presentation_converter.get_slides(presentation_file)
-                for slide in slides:
-                    playlist_items.append({'type': 'slide', 'path': slide, 'duration': SLIDE_DURATION})
-                    total_slides += 1
-        logger.info(f"Added {len(presentation_files)} presentations ({total_slides} slides) to playlist")
+
+        if selected:
+            logger.info(f"Using JSON playlist with {len(selected)} entries")
+            for name in selected:
+                # prefer video if exists
+                if name in video_map and mode in ('both', 'video'):
+                    playlist_items.append({'type': 'video', 'path': video_map[name], 'duration': -1})
+                elif name in pres_map and mode in ('both', 'presentation'):
+                    slides = self.presentation_converter.get_slides(pres_map[name])
+                    for slide in slides:
+                        playlist_items.append({'type': 'slide', 'path': slide, 'duration': SLIDE_DURATION})
+                        total_slides += 1
+                else:
+                    logger.debug(f"Playlist entry not found or excluded by mode: {name}")
+            logger.info(f"Added {len([i for i in playlist_items if i['type']=='video'])} videos and {total_slides} slides from playlist.json")
+        else:
+            # Fallback: previous behavior (all files according to mode)
+            for video in video_files:
+                if mode in ('both', 'video'):
+                    playlist_items.append({'type': 'video', 'path': video, 'duration': -1})
+            logger.info(f"Added {len(video_files)} videos to playlist")
+
+            for presentation_file in presentation_files:
+                if mode in ('both', 'presentation'):
+                    slides = self.presentation_converter.get_slides(presentation_file)
+                    for slide in slides:
+                        playlist_items.append({'type': 'slide', 'path': slide, 'duration': SLIDE_DURATION})
+                        total_slides += 1
+            logger.info(f"Added {len(presentation_files)} presentations ({total_slides} slides) to playlist")
         
         return playlist_items
     

@@ -34,6 +34,7 @@ VIDEOS_DIR = Path.home() / 'signage' / 'content' / 'videos'
 PRESENTATIONS_DIR = Path.home() / 'signage' / 'content' / 'presentations'
 CACHE_DIR = Path.home() / 'signage' / 'cache' / 'slides'  # NEW: Cache directory
 CONFIG_FILE = Path.home() / 'signage' / 'config.json'
+PLAYLIST_FILE = Path.home() / 'signage' / 'playlist.json'
 WEB_PLAYER_PID = Path.home() / 'signage' / 'web_player.pid'
 SIGNAGE_PLAYER_PID = Path.home() / 'signage' / 'signage_player.pid'
 COMMANDS_DIR = Path.home() / 'signage' / 'commands'
@@ -104,6 +105,25 @@ def read_config():
         logger.exception('Failed to read config')
     # default
     return {'mode': 'both'}
+
+
+def read_playlist():
+    try:
+        if PLAYLIST_FILE.exists():
+            return json.loads(PLAYLIST_FILE.read_text())
+    except Exception:
+        logger.exception('Failed to read playlist')
+    return []
+
+
+def write_playlist(lst):
+    try:
+        PLAYLIST_FILE.parent.mkdir(parents=True, exist_ok=True)
+        PLAYLIST_FILE.write_text(json.dumps(lst))
+        return True
+    except Exception:
+        logger.exception('Failed to write playlist')
+        return False
 
 
 def write_config(cfg: dict):
@@ -349,6 +369,7 @@ def logout():
 def dashboard():
     videos = []
     presentations = []
+    playlist = read_playlist()
     
     try:
         VIDEOS_DIR.mkdir(parents=True, exist_ok=True)
@@ -361,7 +382,8 @@ def dashboard():
                         'name': file.name,
                         'size': get_file_size(file),
                         'type': 'video',
-                        'format': get_file_format(file)
+                        'format': get_file_format(file),
+                        'in_playlist': file.name in playlist
                     })
         
         if PRESENTATIONS_DIR.exists():
@@ -371,7 +393,8 @@ def dashboard():
                         'name': file.name,
                         'size': get_file_size(file),
                         'type': 'presentation',
-                        'format': get_file_format(file)
+                        'format': get_file_format(file),
+                        'in_playlist': file.name in playlist
                     })
         
     except Exception as e:
@@ -389,7 +412,34 @@ def dashboard():
                         username=session.get('username'),
                         mode=cfg.get('mode', 'both'),
                         web_running=web_running,
-                        signage_running=signage_running)
+                        signage_running=signage_running,
+                        playlist=playlist)
+
+
+@app.route('/control/toggle_playlist/<content_type>/<filename>', methods=['POST'])
+@login_required
+def toggle_playlist(content_type, filename):
+    """Toggle a file in/out of the playlist"""
+    if content_type not in ('video', 'presentation'):
+        return jsonify({'ok': False, 'error': 'invalid content type'}), 400
+    
+    try:
+        playlist = read_playlist()
+        if filename in playlist:
+            playlist.remove(filename)
+            in_playlist = False
+        else:
+            playlist.append(filename)
+            in_playlist = True
+        
+        ok = write_playlist(playlist)
+        if ok:
+            return jsonify({'ok': True, 'in_playlist': in_playlist, 'filename': filename})
+        else:
+            return jsonify({'ok': False, 'error': 'failed to save'}), 500
+    except Exception as e:
+        logger.exception('Failed to toggle playlist')
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 @app.route('/control/set_mode', methods=['POST'])
