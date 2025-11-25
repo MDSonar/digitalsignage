@@ -17,6 +17,15 @@ import signal
 import sys
 import json
 from pathlib import PurePath
+import platform
+
+# Optional: psutil for system stats (graceful degradation if not installed)
+try:
+    import psutil
+    HAS_PSUTIL = True
+except ImportError:
+    HAS_PSUTIL = False
+    psutil = None
 
 logging.basicConfig(
     level=logging.INFO,
@@ -703,6 +712,70 @@ def delete_file(content_type, filename):
     
     return redirect(url_for('dashboard'))
 
+@app.route('/api/system_stats')
+@login_required
+def api_system_stats():
+    """Return system statistics: CPU, RAM, disk, temperature."""
+    if not HAS_PSUTIL:
+        logger.warning('psutil module not available')
+        return jsonify({'ok': False, 'error': 'psutil not installed'}), 503
+    
+    try:
+        stats = {}
+        
+        # CPU usage
+        try:
+            stats['cpu_percent'] = psutil.cpu_percent(interval=0.1)
+        except Exception:
+            stats['cpu_percent'] = None
+        
+        # RAM usage
+        try:
+            vm = psutil.virtual_memory()
+            stats['ram_percent'] = vm.percent
+            stats['ram_used_gb'] = round(vm.used / (1024**3), 2)
+            stats['ram_total_gb'] = round(vm.total / (1024**3), 2)
+        except Exception:
+            stats['ram_percent'] = None
+        
+        # Disk usage (root /)
+        try:
+            disk = psutil.disk_usage('/')
+            stats['disk_percent'] = disk.percent
+            stats['disk_used_gb'] = round(disk.used / (1024**3), 2)
+            stats['disk_total_gb'] = round(disk.total / (1024**3), 2)
+        except Exception:
+            stats['disk_percent'] = None
+        
+        # Temperature (try Linux thermal zones or system temp)
+        stats['temp_c'] = None
+        try:
+            temps = psutil.sensors_temperatures()
+            if temps:
+                # Try to get CPU temp from common sources
+                for name, entries in temps.items():
+                    if name.lower() in ('cpu', 'coretemp', 'k10temp', 'acpitz'):
+                        if entries:
+                            stats['temp_c'] = round(entries[0].current, 1)
+                            break
+                # If no CPU temp found, use first available
+                if stats['temp_c'] is None and temps:
+                    first_key = next(iter(temps))
+                    if temps[first_key]:
+                        stats['temp_c'] = round(temps[first_key][0].current, 1)
+        except Exception:
+            pass
+        
+        # System info
+        stats['hostname'] = platform.node()
+        stats['platform'] = platform.system()
+        
+        return jsonify({'ok': True, 'stats': stats})
+    except Exception:
+        logger.exception('Failed to get system stats')
+        return jsonify({'ok': False, 'error': 'server error'}), 500
+
+
 @app.errorhandler(413)
 def too_large(e):
     flash('File too large! Maximum: 2GB', 'error')
@@ -721,6 +794,7 @@ if __name__ == '__main__':
     logger.info("=" * 60)
     logger.info("Starting Dashboard...")
     logger.info(f"Max upload: 2GB")
+    logger.info(f"System stats (psutil): {'✓ Available' if HAS_PSUTIL else '✗ Not installed'}")
     logger.info("=" * 60)
     
     app.run(host='0.0.0.0', port=5000, debug=False)

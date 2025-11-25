@@ -165,9 +165,190 @@
 
         /* small utility */
         .muted{color:var(--muted);font-size:0.88rem}
+
+        /* System stats card styling */
+        #systemStatsCard {
+            position: fixed;
+            bottom: 18px;
+            right: 18px;
+            width: 200px;
+            max-width: calc(100vw - 36px);
+            max-height: calc(100vh - 100px);
+            background: var(--card);
+            border-radius: 8px;
+            padding: 8px;
+            box-shadow: var(--shadow);
+            border: 1px solid rgba(15,23,42,0.04);
+            z-index: 100;
+            font-size: 0.75rem;
+            display: none;
+            transition: bottom 0.3s ease;
+            overflow-y: auto;
+        }
+
+        #systemStatsCard.visible {
+            display: block;
+        }
+
+        .stat-section {
+            margin-bottom: 6px;
+            padding: 4px 0;
+        }
+
+        .stat-section-title {
+            font-weight: 700;
+            color: var(--text);
+            font-size: 0.75rem;
+            margin-bottom: 2px;
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .stat-label {
+            color: var(--muted);
+            font-weight: 500;
+            font-size: 0.7rem;
+        }
+
+        .stat-value {
+            font-weight: 700;
+            color: var(--text);
+            font-size: 0.8rem;
+        }
+
+        .stat-bar {
+            width: 100%;
+            height: 3px;
+            background: rgba(15,23,42,0.08);
+            border-radius: 2px;
+            overflow: hidden;
+            margin-top: 1px;
+        }
+
+        .stat-bar-fill {
+            height: 100%;
+            background: var(--accent);
+            border-radius: 2px;
+            transition: width 0.3s ease;
+        }
+
+        .stat-bar-fill.warning {
+            background: #f59e0b;
+        }
+
+        .stat-bar-fill.critical {
+            background: #dc2626;
+        }
+
+        .stat-subtext {
+            font-size: 0.65rem;
+            color: var(--muted);
+            margin-top: 1px;
+        }
+
+        .stat-hostname {
+            font-size: 0.65rem;
+            color: var(--muted);
+            text-align: center;
+            margin-top: 4px;
+            padding-top: 4px;
+            border-top: 1px solid rgba(15,23,42,0.06);
+        }
+
+        @media (max-width: 1024px) {
+            #systemStatsCard {
+                width: 180px;
+                right: 12px;
+                font-size: 0.7rem;
+                padding: 6px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            #systemStatsCard {
+                position: fixed;
+                width: calc(100vw - 24px);
+                right: 12px;
+                left: auto;
+                transform: none;
+                top: auto;
+                max-height: calc(100vh - 90px);
+            }
+        }
+
+        @media (max-width: 480px) {
+            #systemStatsCard {
+                width: calc(100vw - 20px);
+                right: 10px;
+                font-size: 0.7rem;
+                padding: 6px;
+            }
+
+            #statsToggleBtn {
+                width: 42px;
+                height: 42px;
+                font-size: 1rem;
+                bottom: 12px;
+                right: 10px;
+            }
+        }
+
+        /* Stats toggle button */
+        #statsToggleBtn {
+            position: fixed;
+            bottom: 18px;
+            right: 18px;
+            width: 46px;
+            height: 46px;
+            border-radius: 50%;
+            border: none;
+            background: linear-gradient(180deg, var(--accent), var(--accent-2));
+            color: white;
+            font-size: 1.2rem;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 6px 20px rgba(86,99,235,0.28);
+            transition: transform 0.2s, box-shadow 0.2s;
+            z-index: 99;
+        }
+
+        #statsToggleBtn:hover {
+            transform: translateY(-3px) scale(1.05);
+            box-shadow: 0 8px 24px rgba(86,99,235,0.36);
+        }
+
+        #statsToggleBtn:active {
+            transform: translateY(-1px) scale(0.98);
+        }
+
+        @media (max-width: 768px) {
+            #statsToggleBtn {
+                bottom: 12px;
+                right: 12px;
+            }
+        }
+    </style>
     </style>
 </head>
 <body>
+<!-- Stats Toggle Button -->
+<button id="statsToggleBtn" title="Toggle System Stats">📊</button>
+
+<!-- System Stats Card (Fixed) -->
+<div id="systemStatsCard">
+    <div id="statsContent" style="display:flex;flex-direction:column;gap:4px">
+        <div class="muted" style="margin-bottom:4px">Loading…</div>
+    </div>
+    <div class="stat-hostname" id="statsHostname"></div>
+</div>
 <div class="container">
     <div class="app" role="application" aria-label="Litmus Signage Dashboard">
         <header>
@@ -855,6 +1036,149 @@ function renderPlaylistPanel(items){
 
 // initial load
 document.addEventListener('DOMContentLoaded', ()=>{ fetchPlaylistOrder().catch(()=>{}); });
+
+// System stats: define functions first, then attach listeners
+function getBarClass(percent){
+    if(percent >= 90) return 'critical';
+    if(percent >= 75) return 'warning';
+    return '';
+}
+
+function renderSystemStats(stats){
+    const card = document.getElementById('systemStatsCard');
+    if(!card) return;
+
+    let html = '';
+
+    // CPU
+    if(stats.cpu_percent !== null && stats.cpu_percent !== undefined){
+        const cpu = Math.round(stats.cpu_percent);
+        html += `<div class="stat-section">
+            <div class="stat-section-title">CPU</div>
+            <div class="stat-row">
+                <span class="stat-label">Use</span>
+                <span class="stat-value">${cpu}%</span>
+            </div>
+            <div class="stat-bar">
+                <div class="stat-bar-fill ${getBarClass(cpu)}" style="width:${Math.min(100,cpu)}%"></div>
+            </div>
+        </div>`;
+    }
+
+    // RAM
+    if(stats.ram_percent !== null && stats.ram_percent !== undefined){
+        const ram = Math.round(stats.ram_percent);
+        html += `<div class="stat-section">
+            <div class="stat-section-title">RAM</div>
+            <div class="stat-row">
+                <span class="stat-label">Use</span>
+                <span class="stat-value">${ram}%</span>
+            </div>
+            <div class="stat-bar">
+                <div class="stat-bar-fill ${getBarClass(ram)}" style="width:${Math.min(100,ram)}%"></div>
+            </div>
+            <div class="stat-subtext">${stats.ram_used_gb}/${stats.ram_total_gb}GB</div>
+        </div>`;
+    }
+
+    // Disk
+    if(stats.disk_percent !== null && stats.disk_percent !== undefined){
+        const disk = Math.round(stats.disk_percent);
+        html += `<div class="stat-section">
+            <div class="stat-section-title">Disk</div>
+            <div class="stat-row">
+                <span class="stat-label">Use</span>
+                <span class="stat-value">${disk}%</span>
+            </div>
+            <div class="stat-bar">
+                <div class="stat-bar-fill ${getBarClass(disk)}" style="width:${Math.min(100,disk)}%"></div>
+            </div>
+        </div>`;
+    }
+
+    // Temp
+    if(stats.temp_c !== null && stats.temp_c !== undefined && stats.temp_c > 0){
+        const tempColor = stats.temp_c > 80 ? '#dc2626' : (stats.temp_c > 70 ? '#f59e0b' : 'var(--text)');
+        html += `<div class="stat-section">
+            <div class="stat-section-title">Temp</div>
+            <div class="stat-row">
+                <span class="stat-label">Core</span>
+                <span class="stat-value" style="color:${tempColor}">${stats.temp_c}°C</span>
+            </div>
+        </div>`;
+    }
+
+    html += `<div class="stat-hostname">${stats.hostname || 'System'}</div>`;
+    card.innerHTML = html;
+}
+
+// Toggle stats card visibility
+function toggleStatsCard() {
+    const card = document.getElementById('systemStatsCard');
+    const btn = document.getElementById('statsToggleBtn');
+    const isVisible = card.classList.toggle('visible');
+    
+    if(isVisible) {
+        // Card is now visible - position it just above the button
+        btn.textContent = '✕';
+        const cardHeight = card.offsetHeight || 200;
+        const buttonSize = 46;
+        const gap = 12;
+        // Position card so its bottom is just above the button with small gap
+        card.style.bottom = (buttonSize + gap + gap) + 'px';
+    } else {
+        // Card is hidden
+        btn.textContent = '📊';
+        card.style.bottom = '18px';
+    }
+}
+
+// System stats card: fetch and refresh periodically
+async function fetchSystemStats(){
+    try{
+        console.log('Fetching system stats...');
+        const res = await fetch('/api/system_stats');
+        console.log('Response status:', res.status);
+        if(!res.ok){
+            if(res.status === 503){
+                // psutil not installed
+                console.warn('psutil not installed (503)');
+                document.getElementById('systemStatsCard').style.display = 'none';
+                return;
+            }
+            throw new Error('Failed to fetch: ' + res.status);
+        }
+        const j = await res.json();
+        console.log('Stats response:', j);
+        if(!j.ok) {
+            if(j.error && j.error.includes('psutil')){
+                console.warn('psutil not installed:', j.error);
+                document.getElementById('systemStatsCard').style.display = 'none';
+                return;
+            }
+            throw new Error(j.error || 'Bad response');
+        }
+        console.log('Rendering stats:', j.stats);
+        renderSystemStats(j.stats || {});
+    }catch(err){
+        console.warn('System stats unavailable:', err);
+        // Hide card if stats unavailable
+        try{ document.getElementById('systemStatsCard').style.display = 'none'; }catch(e){}
+    }
+}
+
+// Fetch stats on page load and every 5 seconds
+document.addEventListener('DOMContentLoaded', ()=>{
+    // Set up stats toggle button
+    const toggleBtn = document.getElementById('statsToggleBtn');
+    if(toggleBtn) {
+        toggleBtn.addEventListener('click', toggleStatsCard);
+    }
+    
+    fetchSystemStats();
+    setInterval(fetchSystemStats, 5000);
+});
+
 </script>
 </body>
 </html>
