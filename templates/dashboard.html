@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Dashboard - Digital Signage</title>
+
+    <style>
+        :root{
+            --bg: #f4f6fb;
+            --card: #ffffff;
+            --accent: #556ee6;
+            --accent-2: #6b5dd8;
+            --muted: #6b7280;
+            --text: #0f172a;
+            --danger: #dc3545;
+            --danger-dark: #b02a37;
+            --radius: 12px;
+            --gap: 14px;
+            --shadow: 0 8px 24px rgba(16,24,40,0.06);
+            --easing: cubic-bezier(.2,.9,.3,1);
+        }
+
+        /* Base reset */
+        *{box-sizing:border-box;margin:0;padding:0}
+        html,body{height:100%}
+        body{
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system,"Segoe UI", Roboto, "Helvetica Neue", Arial;
+            color:var(--text);
+            background:var(--bg);
+            -webkit-font-smoothing:antialiased;
+            -moz-osx-font-smoothing:grayscale;
+            padding:18px;
+            line-height:1.3;
+            font-size:15px;
+            position: relative;
+        }
+        
+        /* Logo watermark: top-left corner, fixed, responsive */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 18px;
+            left: 18px;
+            width: 140px;
+            height: 140px;
+            background: url('/static/logo/logo.png') no-repeat center;
+            background-size: contain;
+            opacity: 0.12;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        /* Container */
+        .container{max-width:1100px;margin:0 auto;background:transparent;position: relative;z-index: 2;}
+
+        /* App frame */
+        .app{background:linear-gradient(180deg, rgba(255,255,255,0.9), rgba(255,255,255,0.95));border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);border:1px solid rgba(15,23,42,0.04)}
+
+        header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;background:linear-gradient(90deg,var(--accent),var(--accent-2));color:white}
+        header h1{font-size:1rem;font-weight:700;letter-spacing:0.2px}
+        .user-info{font-size:0.85rem;opacity:0.95}
+        .logout-btn{background:rgba(255,255,255,0.12);color:white;padding:8px 12px;border-radius:10px;text-decoration:none;font-weight:700;border:1px solid rgba(255,255,255,0.06)}
+
+        /* Content grid */
+        .content{display:grid;grid-template-columns: 360px 1fr;gap:18px;padding:18px}
+
+        /* Top-level card style */
+        .card{background:var(--card);border-radius:10px;padding:14px;border:1px solid rgba(15,23,42,0.04);transition:transform .18s var(--easing), box-shadow .18s var(--easing)}
+        .card:hover{transform:translateY(-3px);box-shadow:0 14px 30px rgba(16,24,40,0.08)}
+
+        .section-header{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+        .section-header h2{font-size:0.98rem;margin:0}
+        .section-sub{color:var(--muted);font-size:0.85rem}
+
+        /* Player controls & groups */
+        .controls { display:flex;flex-direction:column;gap:10px }
+        .control-block{display:flex;flex-direction:column;gap:8px}
+        .control-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+
+        /* Iconic circular buttons */
+        .icon-btn{width:46px;height:46px;border-radius:999px;border:none;background:linear-gradient(180deg,#111827,#1f2937);color:white;display:inline-flex;align-items:center;justify-content:center;font-size:1.05rem;cursor:pointer;transition:transform .12s var(--easing), box-shadow .12s var(--easing);box-shadow:0 4px 10px rgba(2,6,23,0.08)}
+        .icon-btn:hover{transform:translateY(-3px) scale(1.03)}
+        .icon-btn:active{transform:translateY(-1px) scale(.99)}
+        .icon-btn.ghost{background:transparent;color:var(--accent);border:1px solid rgba(86,99,235,0.12);box-shadow:none}
+        .icon-btn.pause{background:linear-gradient(180deg,#374151,#111827)}
+
+        /* Forms must remain POST; ensure buttons fill and remain accessible */
+        .control-form{display:inline-flex;gap:8px}
+        .control-form button{background:transparent;border:none;padding:0;margin:0}
+
+        /* Video/Presentation lists */
+        .files-list{display:flex;flex-direction:column;gap:10px}
+        .file-item{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px;border-radius:10px;border:1px solid rgba(15,23,42,0.04);background:linear-gradient(180deg, rgba(255,255,255,0.6), rgba(250,250,250,0.6));transition:transform .12s var(--easing)}
+        .file-item:hover{transform:translateY(-2px)}
+        .file-info{display:flex;flex-direction:column;min-width:0}
+        .file-name{font-weight:700;color:var(--text);word-break:break-word}
+        .file-size{color:var(--muted);font-size:0.86rem}
+
+        .file-actions{display:flex;gap:8px;align-items:center}
+        .delete-btn{background:var(--danger);color:white;border:none;padding:8px 10px;border-radius:8px;font-weight:700;cursor:pointer;transition:background .12s,var(--easing), transform .08s var(--easing)}
+        .delete-btn:hover{background:var(--danger-dark);transform:translateY(-1px)}
+        .delete-form{margin:0}
+
+        /* Badges */
+        .file-badge{font-size:0.75rem;padding:6px 8px;border-radius:8px;background:rgba(0,0,0,0.04);color:var(--muted);font-weight:700}
+        .badge-pptx{background:#fff7ed;color:#7c2d12}
+        .badge-pdf{background:#fff1f2;color:#7f1d1d}
+
+        /* Upload area (styled file input as drop area) */
+        .drop-area{display:flex;align-items:center;justify-content:center;gap:10px;padding:12px;border-radius:10px;border:2px dashed rgba(86,99,235,0.08);background:linear-gradient(180deg, rgba(86,99,235,0.03), rgba(86,99,235,0.01));cursor:pointer;color:var(--muted);font-weight:700;text-align:center}
+        .drop-area:hover{background:linear-gradient(180deg, rgba(86,99,235,0.06), rgba(86,99,235,0.02))}
+        .drop-area small{display:block;font-weight:600;color:var(--muted);font-size:0.86rem}
+        input[type="file"]{display:none}
+    .drop-area .selected-name{margin-top:8px;font-weight:600;font-size:0.9rem;color:var(--text);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .drop-area.dragover{border-color:rgba(86,99,235,0.28);background:linear-gradient(180deg, rgba(86,99,235,0.06), rgba(86,99,235,0.03))}
+    .is-hidden{display:none!important}
+    .preview-thumb{max-width:220px;max-height:120px;border-radius:8px;display:block;object-fit:cover}
+    .preview-video{max-width:220px;max-height:120px;border-radius:8px;display:block;object-fit:cover}
+    .preview-icon{width:72px;height:72px;display:flex;align-items:center;justify-content:center;border-radius:12px;background:rgba(15,23,42,0.04);color:var(--muted);font-weight:800}
+
+        /* Mode slider / segmented control */
+        .mode-wrap{display:flex;flex-direction:column;gap:8px}
+        .segmented{position:relative;display:inline-grid;grid-auto-flow:column;border-radius:999px;padding:4px;background:rgba(15,23,42,0.04);gap:6px;align-items:center}
+    .segmented button{appearance:none;border:0;background:transparent;padding:8px 14px;border-radius:999px;font-weight:700;color:var(--muted);cursor:pointer;transition:color .12s,var(--easing);position:relative;z-index:3}
+    /* Selected segment: high contrast so it's readable even under the knob */
+    .segmented button[aria-pressed="true"]{color:#ffffff;font-weight:800;text-shadow:0 1px 1px rgba(0,0,0,0.28)}
+    .slider-knob{position:absolute;left:4px;top:4px;bottom:4px;width:calc((100% - 8px)/3 - 6px);background:linear-gradient(90deg,var(--accent),var(--accent-2));border-radius:999px;transition:left .18s var(--easing);z-index:2;box-shadow:0 6px 20px rgba(86,99,235,0.18);opacity:0.98}
+
+        /* Save button */
+        .save-mode-btn{padding:8px 12px;border-radius:8px;border:0;background:linear-gradient(90deg,var(--accent),var(--accent-2));color:white;font-weight:800;cursor:pointer}
+
+        /* Flash messages */
+        .flash-wrap{padding:6px 18px}
+        .flash{border-radius:10px;padding:10px 12px;margin-bottom:8px;box-shadow:0 6px 18px rgba(2,6,23,0.04);opacity:0;transform:translateY(-6px);animation:fadeIn .36s forwards}
+        .flash.success{background:#f0fff4;color:#065f46;border:1px solid rgba(6,95,70,0.06)}
+        .flash.error{background:#fff0f0;color:#9b1c1c;border:1px solid rgba(155,28,28,0.06)}
+        @keyframes fadeIn{to{opacity:1;transform:none}}
+
+        /* Progress bar */
+        .progress{height:3px;background:linear-gradient(90deg,var(--accent),var(--accent-2));width:0%;transition:width .28s linear}
+        .progress-wrap{height:3px;background:rgba(15,23,42,0.03);overflow:hidden}
+
+        /* Responsive */
+        @media (max-width: 880px){.content{grid-template-columns:1fr;gap:12px;padding:14px}.control-row{justify-content:space-between}}
+        @media (max-width: 420px){
+            body{padding:12px}
+            body::before {
+                top: 12px;
+                left: 12px;
+                width: 100px;
+                height: 100px;
+            }
+            header{padding:12px}
+            .icon-btn{width:54px;height:54px;font-size:1.15rem}
+            .segmented button{padding:12px 10px;font-size:0.95rem}
+            .slider-knob{top:3px;bottom:3px}
+            .file-item{padding:12px;flex-direction:column;align-items:flex-start}
+            .file-actions{width:100%;justify-content:space-between;margin-top:6px}
+            .delete-btn{width:46%}
+        }
+
+        /* small utility */
+        .muted{color:var(--muted);font-size:0.88rem}
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="app" role="application" aria-label="Digital Signage Dashboard">
+        <header>
+            <div>
+                <h1>🖥️ Digital Signage Dashboard</h1>
+                <div class="user-info">Logged in as: {{ username }}</div>
+            </div>
+            <a href="{{ url_for('logout') }}" class="logout-btn" aria-label="Logout">Logout</a>
+        </header>
+
+        <!-- top progress bar -->
+        <div class="progress-wrap" aria-hidden="true">
+            <div id="topProgress" class="progress" style="width:0%"></div>
+        </div>
+
+        <div class="content" role="main">
+            <!-- Left column: Player controls and mode -->
+            <div class="card">
+                <div class="section-header"><h2>⚙️ Player Control</h2></div>
+
+                <!-- Flash messages -->
+                <div class="flash-wrap" aria-live="polite">
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            {% for category, message in messages %}
+                                <div class="flash {{ category }}">{{ message }}</div>
+                            {% endfor %}
+                        {% endif %}
+                    {% endwith %}
+                </div>
+
+                <div class="controls">
+                    <!-- Mode form (must keep action and method intact) -->
+                    <form action="{{ url_for('set_mode') }}" method="POST" class="control-block" id="modeForm" aria-label="Player mode form">
+                        <div class="section-header" style="margin-bottom:6px">
+                            <h2>Player Mode</h2>
+                            <div class="section-sub">Choose content to play</div>
+                        </div>
+
+                        <div class="mode-wrap">
+                            <!-- Visual segmented slider (JS will update hidden input named 'mode') -->
+                            <div class="segmented" id="segmented" role="tablist" aria-label="Player mode">
+                                <div class="slider-knob" id="sliderKnob" aria-hidden="true"></div>
+                                <button type="button" role="tab" aria-pressed="false" data-value="video">Video</button>
+                                <button type="button" role="tab" aria-pressed="false" data-value="presentation">Presentation</button>
+                                <button type="button" role="tab" aria-pressed="false" data-value="both">Both</button>
+                            </div>
+
+                            <!-- Hidden input to preserve server-side name 'mode' -->
+                            <input type="hidden" name="mode" id="modeInput" value="{{ mode|default('both') }}">
+                        </div>
+
+                        <div style="margin-top:8px">
+                            <button type="submit" class="save-mode-btn" aria-label="Save player mode">Save Mode</button>
+                        </div>
+                    </form>
+
+                    <hr style="border:none;height:8px" />
+
+                    <!-- Web Player Controls -->
+                    <div class="control-block" aria-label="Web player controls">
+                        <div class="section-header"><h2>Web Player Controls</h2></div>
+                        <div class="control-row">
+                            <form action="{{ url_for('send_command') }}" method="POST" class="control-form" aria-label="Web player command form">
+                                <input type="hidden" name="target" value="web">
+                                <button class="icon-btn ghost" aria-label="Previous" name="action" value="prev" title="Previous" type="submit">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                        <path d="M11.5 12L20 18V6L11.5 12Z" fill="currentColor" />
+                                        <path d="M4 18V6L9.5 12L4 18Z" fill="currentColor" />
+                                    </svg>
+                                </button>
+                                <button class="icon-btn" aria-label="Play" name="action" value="play" title="Play" type="submit">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                        <path d="M5 3v18l15-9L5 3z" fill="currentColor" />
+                                    </svg>
+                                </button>
+                                <button class="icon-btn pause" aria-label="Pause" name="action" value="pause" title="Pause" type="submit">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                        <rect x="6" y="5" width="4" height="14" fill="currentColor" />
+                                        <rect x="14" y="5" width="4" height="14" fill="currentColor" />
+                                    </svg>
+                                </button>
+                                <button class="icon-btn ghost" aria-label="Next" name="action" value="next" title="Next" type="submit">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                        <path d="M3 6v12l9-6-9-6z" fill="currentColor" />
+                                        <path d="M12 6v12l9-6-9-6z" fill="currentColor" />
+                                    </svg>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Signage (HDMI) Controls -->
+                    <div class="control-block" aria-label="Signage controls">
+                        <div class="section-header"><h2>Signage (HDMI) Controls</h2></div>
+                        <div class="control-row">
+                            <form action="{{ url_for('send_command') }}" method="POST" class="control-form" aria-label="Signage command form">
+                                <input type="hidden" name="target" value="signage">
+                                <button class="icon-btn ghost" aria-label="Previous signage" name="action" value="prev" title="Previous" type="submit">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                        <path d="M11.5 12L20 18V6L11.5 12Z" fill="currentColor" />
+                                        <path d="M4 18V6L9.5 12L4 18Z" fill="currentColor" />
+                                    </svg>
+                                </button>
+                                <button class="icon-btn" aria-label="Play signage" name="action" value="play" title="Play" type="submit">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                        <path d="M5 3v18l15-9L5 3z" fill="currentColor" />
+                                    </svg>
+                                </button>
+                                <button class="icon-btn pause" aria-label="Pause signage" name="action" value="pause" title="Pause" type="submit">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                        <rect x="6" y="5" width="4" height="14" fill="currentColor" />
+                                        <rect x="14" y="5" width="4" height="14" fill="currentColor" />
+                                    </svg>
+                                </button>
+                                <button class="icon-btn ghost" aria-label="Next signage" name="action" value="next" title="Next" type="submit">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                        <path d="M3 6v12l9-6-9-6z" fill="currentColor" />
+                                        <path d="M12 6v12l9-6-9-6z" fill="currentColor" />
+                                    </svg>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right column: Uploads and lists -->
+            <div>
+                <!-- Videos card -->
+                <div class="card" aria-labelledby="videosHeading" style="margin-bottom:12px">
+                    <div class="section-header"><h2 id="videosHeading">📹 Videos</h2></div>
+
+                    <div class="upload-form" style="display:flex;flex-direction:column;gap:10px">
+                        <form action="{{ url_for('upload_file', content_type='video') }}" method="POST" enctype="multipart/form-data" class="uploadForm" aria-label="Upload video form">
+                            <!-- Drop area styled label -->
+                            <label class="drop-area" for="videoFile" tabindex="0" aria-label="Upload a video">
+                                <div class="drop-default">
+                                    <strong>Drag & drop or click to browse</strong>
+                                    <small>MP4, AVI, MOV, MKV, WEBM (max size depends on server)</small>
+                                </div>
+
+                                <div class="preview-area is-hidden">
+                                    <img class="preview-thumb is-hidden" id="videoPreviewImg" alt="preview thumbnail">
+                                    <video class="preview-video is-hidden" id="videoPreviewVid" muted playsinline loop></video>
+                                    <div class="preview-icon is-hidden" id="videoPreviewIcon">VID</div>
+                                </div>
+
+                                <div class="selected-name muted is-hidden" id="videoSelected" aria-live="polite"></div>
+                                <input id="videoFile" type="file" name="file" accept=".mp4,.avi,.mov,.mkv,.webm" required>
+                            </label>
+
+                            <div style="display:flex;gap:10px;justify-content:flex-end">
+                                <button type="submit" class="save-mode-btn" aria-label="Upload video">Upload</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div class="files-list" style="margin-top:12px">
+                        {% if videos %}
+                            {% for file in videos %}
+                                <div class="file-item" role="listitem">
+                                    <div class="file-info">
+                                        <div class="file-name">{{ file.name }}</div>
+                                        <div class="file-size">{{ file.size }}</div>
+                                    </div>
+                                    <div class="file-actions">
+                                        <span class="file-badge">{{ file.name.split('.')[-1]|upper }}</span>
+                                        <form class="delete-form" action="{{ url_for('delete_file', content_type='video', filename=file.name) }}" method="POST" onsubmit="return confirm('Delete {{ file.name }}?')">
+                                            <button type="submit" class="delete-btn" aria-label="Delete {{ file.name }}">Delete</button>
+                                        </form>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="file-item" style="justify-content:center"><div class="muted">No videos uploaded yet</div></div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Presentations card -->
+                <div class="card" aria-labelledby="presentationsHeading">
+                    <div class="section-header"><h2 id="presentationsHeading">📊 Presentations</h2></div>
+
+                    <div class="upload-form" style="display:flex;flex-direction:column;gap:10px">
+                        <form action="{{ url_for('upload_file', content_type='presentation') }}" method="POST" enctype="multipart/form-data" class="uploadForm" aria-label="Upload presentation form">
+                            <label class="drop-area" for="presentationFile" tabindex="0" aria-label="Upload a presentation">
+                                <div class="drop-default">
+                                    <strong>Drag & drop or click to browse</strong>
+                                    <small>PPTX, PPT, PDF</small>
+                                </div>
+
+                                <div class="preview-area is-hidden">
+                                    <img class="preview-thumb is-hidden" id="presentationPreviewImg" alt="preview thumbnail">
+                                    <video class="preview-video is-hidden" id="presentationPreviewVid" muted playsinline loop></video>
+                                    <div class="preview-icon is-hidden" id="presentationPreviewIcon">PPT</div>
+                                </div>
+
+                                <div class="selected-name muted is-hidden" id="presentationSelected" aria-live="polite"></div>
+                                <input id="presentationFile" type="file" name="file" accept=".pptx,.ppt,.pdf" required>
+                            </label>
+
+                            <div style="display:flex;gap:10px;justify-content:flex-end">
+                                <button type="submit" class="save-mode-btn" aria-label="Upload presentation">Upload</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div class="files-list" style="margin-top:12px">
+                        {% if presentations %}
+                            {% for file in presentations %}
+                                <div class="file-item" role="listitem">
+                                    <div class="file-info">
+                                        <div class="file-name">
+                                            {{ file.name }}
+                                            {% if file.format %}
+                                                <span class="file-badge badge-{{ file.format|lower }}">{{ file.format }}</span>
+                                            {% endif %}
+                                        </div>
+                                        <div class="file-size">{{ file.size }}</div>
+                                    </div>
+                                    <div class="file-actions">
+                                        <span class="file-badge">{{ file.name.split('.')[-1]|upper }}</span>
+                                        <form class="delete-form" action="{{ url_for('delete_file', content_type='presentation', filename=file.name) }}" method="POST" onsubmit="return confirm('Delete {{ file.name }}?')">
+                                            <button type="submit" class="delete-btn" aria-label="Delete {{ file.name }}">Delete</button>
+                                        </form>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="file-item" style="justify-content:center"><div class="muted">No presentations uploaded yet</div></div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- small footer spacing -->
+        <div style="height:18px"></div>
+    </div>
+</div>
+
+<script>
+    (function(){
+        // Segmented slider logic
+        const segmented = document.getElementById('segmented');
+        const buttons = Array.from(segmented.querySelectorAll('button'));
+        const knob = document.getElementById('sliderKnob');
+        const modeInput = document.getElementById('modeInput');
+
+        // Map button index to value
+        const values = buttons.map(b => b.dataset.value);
+
+        // Initialize selected from server-side value
+        let initial = (modeInput.value || 'both').toLowerCase();
+        let selectedIndex = Math.max(0, values.indexOf(initial));
+        if (selectedIndex === -1) selectedIndex = 2;
+
+        function updateUI(index, animate=true){
+            // update aria-pressed
+            buttons.forEach((b,i)=> b.setAttribute('aria-pressed', i===index ? 'true' : 'false'));
+            // place knob
+            const total = buttons.length;
+            const segmentWidth = 100 / total;
+            const leftPercent = 4 + index * (segmentWidth); // small padding compensation
+            knob.style.left = `calc(${index * (100/total)}% + 4px)`;
+            // update hidden input
+            modeInput.value = values[index];
+        }
+
+        // Click handlers
+        buttons.forEach((b, i) => {
+            b.addEventListener('click', () => updateUI(i));
+            b.addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowLeft') updateUI(Math.max(0, i-1));
+                if (e.key === 'ArrowRight') updateUI(Math.min(buttons.length-1, i+1));
+            });
+        });
+
+        // Drag support for knob (lightweight)
+        (function addDrag(){
+            let dragging = false;
+            let startX = 0;
+            knob.addEventListener('pointerdown', (ev) => {
+                ev.preventDefault();
+                dragging = true;
+                startX = ev.clientX;
+                knob.setPointerCapture(ev.pointerId);
+            });
+            window.addEventListener('pointermove', (ev) => {
+                if (!dragging) return;
+                const rect = segmented.getBoundingClientRect();
+                const relX = ev.clientX - rect.left;
+                let pct = Math.max(0, Math.min(1, relX / rect.width));
+                const idx = Math.round(pct * (buttons.length - 1));
+                updateUI(idx);
+            });
+            window.addEventListener('pointerup', (ev) => { dragging = false; });
+        })();
+
+        // Set initial UI
+        updateUI(selectedIndex);
+
+        // Make segmented collapse to buttons on tiny screens by CSS fallback (JS not needed)
+
+        // File input drop areas: improve UX (keep functionality) and show selected filename
+        const dropAreas = document.querySelectorAll('.drop-area');
+        function formatBytes(bytes) {
+            if (!bytes && bytes !== 0) return '';
+            const units = ['B','KB','MB','GB','TB'];
+            let i = 0;
+            let val = Number(bytes);
+            while (val >= 1024 && i < units.length - 1) {
+                val /= 1024;
+                i++;
+            }
+            return `${val.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+        }
+
+        function updateSelectedDisplayForInput(input){
+            if (!input) return;
+            const label = input.closest('.drop-area');
+            if (!label) return;
+
+            const defaultMsg = label.querySelector('.drop-default');
+            const display = label.querySelector('.selected-name');
+            const previewArea = label.querySelector('.preview-area');
+            const previewImg = previewArea ? previewArea.querySelector('.preview-thumb') : null;
+            const previewVid = previewArea ? previewArea.querySelector('.preview-video') : null;
+            const previewIcon = previewArea ? previewArea.querySelector('.preview-icon') : null;
+
+            const files = input.files;
+
+            // Reset view
+            if (defaultMsg) defaultMsg.classList.remove('is-hidden');
+            if (display) display.classList.add('is-hidden');
+            if (previewArea) previewArea.classList.add('is-hidden');
+            if (previewImg) { previewImg.classList.add('is-hidden'); previewImg.src = ''; }
+            if (previewVid) { previewVid.classList.add('is-hidden'); previewVid.pause(); previewVid.removeAttribute('src'); previewVid.load && previewVid.load(); }
+            if (previewIcon) previewIcon.classList.add('is-hidden');
+
+            if (!files || files.length === 0){
+                // show default drop message only
+                return;
+            }
+
+            // At least one file selected: hide default and show preview/caption
+            if (defaultMsg) defaultMsg.classList.add('is-hidden');
+            if (previewArea) previewArea.classList.remove('is-hidden');
+
+            if (files.length === 1){
+                const f = files[0];
+                const size = formatBytes(f.size);
+                const ext = (f.name.split('.').pop() || '').toUpperCase();
+
+                // Update caption
+                if (display) {
+                    display.textContent = `${f.name} — ${size} • ${ext}`;
+                    display.title = `${f.name} (${size})`;
+                    display.classList.remove('is-hidden');
+                }
+
+                // Image preview
+                if (f.type && f.type.startsWith('image/') && previewImg) {
+                    const reader = new FileReader();
+                    reader.onload = function(ev) {
+                        previewImg.src = ev.target.result;
+                        previewImg.classList.remove('is-hidden');
+                        if (previewVid) previewVid.classList.add('is-hidden');
+                        if (previewIcon) previewIcon.classList.add('is-hidden');
+                    };
+                    reader.readAsDataURL(f);
+                    return;
+                }
+
+                // Video preview: show small looping muted preview via object URL
+                if (f.type && f.type.startsWith('video/') && previewVid) {
+                    try {
+                        const url = URL.createObjectURL(f);
+                        previewVid.src = url;
+                        previewVid.classList.remove('is-hidden');
+                        previewVid.muted = true;
+                        previewVid.loop = true;
+                        previewVid.play().catch(() => {});
+                        if (previewImg) previewImg.classList.add('is-hidden');
+                        if (previewIcon) previewIcon.classList.add('is-hidden');
+                    } catch (err) {
+                        // fallback to icon
+                        if (previewIcon) previewIcon.classList.remove('is-hidden');
+                    }
+                    return;
+                }
+
+                // For ppt/pdf or unknown types, show generic icon
+                if (previewIcon) {
+                    previewIcon.classList.remove('is-hidden');
+                }
+                if (previewImg) previewImg.classList.add('is-hidden');
+                if (previewVid) previewVid.classList.add('is-hidden');
+
+            } else {
+                // multiple files: show combined caption and generic icon
+                let total = 0;
+                for (let i = 0; i < files.length; i++) total += files[i].size || 0;
+                if (display) {
+                    display.textContent = `${files.length} files selected — ${formatBytes(total)}`;
+                    display.title = `${files.length} files, ${formatBytes(total)}`;
+                    display.classList.remove('is-hidden');
+                }
+                if (previewIcon) previewIcon.classList.remove('is-hidden');
+            }
+        }
+
+        dropAreas.forEach(area => {
+            const input = area.querySelector('input[type="file"]');
+            if (!input) return;
+            // show initial state if any
+            updateSelectedDisplayForInput(input);
+
+            ['dragenter','dragover'].forEach(evName => { area.addEventListener(evName, (e) => { e.preventDefault(); area.classList.add('dragover'); }); });
+            ['dragleave','drop'].forEach(evName => { area.addEventListener(evName, (e) => { e.preventDefault(); area.classList.remove('dragover'); }); });
+            area.addEventListener('drop', (e) => {
+                if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+                    input.files = e.dataTransfer.files;
+                    updateSelectedDisplayForInput(input);
+                }
+            });
+            area.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { input.click(); e.preventDefault(); } });
+
+            // update display when user selects from file picker
+            input.addEventListener('change', () => updateSelectedDisplayForInput(input));
+        });
+
+        // Progress bar animation on file upload forms (UI-only, lightweight)
+        const topProgress = document.getElementById('topProgress');
+        const uploadForms = document.querySelectorAll('form.uploadForm');
+        uploadForms.forEach(form => {
+            form.addEventListener('submit', (e) => {
+                topProgress.style.width = '6%';
+                topProgress.style.transition = 'width 300ms linear';
+                setTimeout(()=> topProgress.style.width = '30%', 120);
+                setTimeout(()=> topProgress.style.width = '55%', 700);
+                setTimeout(()=> topProgress.style.width = '78%', 1400);
+                setTimeout(()=> topProgress.style.width = '98%', 5000);
+            });
+        });
+
+        // On page load, animate progress to 100% then hide
+        window.addEventListener('pageshow', () => {
+            setTimeout(()=> { topProgress.style.width = '100%'; setTimeout(()=> { topProgress.style.width = '0%'; }, 300); }, 80);
+        });
+
+        // Ensure forms with file inputs also show progress when submit via buttons
+        const uploadButtons = document.querySelectorAll('form.uploadForm button[type="submit"]');
+        uploadButtons.forEach(btn => { btn.addEventListener('click', () => { topProgress.style.width = '6%'; setTimeout(()=> topProgress.style.width = '30%', 150); }); });
+
+        // Accessibility: focus visible outline for segmented buttons
+        buttons.forEach(b => { b.addEventListener('focus', () => b.style.outline = '2px solid rgba(86,99,235,0.18)'); b.addEventListener('blur', () => b.style.outline = 'none'); });
+    })();
+
+/* Chunked upload support: improves large file uploads by sending in smaller parts with progress. */
+(function(){
+    const CHUNK_SIZE = 4 * 1024 * 1024; // 4 MiB
+
+    async function uploadFileInChunks(file, contentType, progressCb) {
+        const totalBytes = file.size;
+        const totalChunks = Math.ceil(totalBytes / CHUNK_SIZE);
+        let uploadedBytes = 0;
+
+        for (let idx = 0; idx < totalChunks; idx++) {
+            const start = idx * CHUNK_SIZE;
+            const end = Math.min(totalBytes, start + CHUNK_SIZE);
+            const blob = file.slice(start, end);
+
+            const form = new FormData();
+            // include the chunk with the original filename so server can assemble
+            form.append('file', blob, file.name);
+            form.append('filename', file.name);
+            form.append('index', String(idx));
+            form.append('total', String(totalChunks));
+
+            try {
+                const res = await fetch(`/upload_chunk/${contentType}`, { method: 'POST', body: form });
+                if (!res.ok) throw new Error('Upload failed');
+                const j = await res.json();
+                if (!j.ok) throw new Error(j.error || 'Upload error');
+            } catch (err) {
+                console.error('Chunk upload error', err);
+                throw err;
+            }
+
+            uploadedBytes = end;
+            if (typeof progressCb === 'function') progressCb(uploadedBytes, totalBytes);
+        }
+    }
+
+    // Intercept upload forms and perform chunked upload when a file is selected
+    const uploadForms = document.querySelectorAll('form.uploadForm');
+    uploadForms.forEach(form => {
+        form.addEventListener('submit', async (e) => {
+            // If user agent doesn't support fetch or slice, let the form submit normally
+            if (!window.fetch || !Blob.prototype.slice) return;
+
+            const input = form.querySelector('input[type="file"]');
+            if (!input || !input.files || input.files.length === 0) return; // normal
+
+            e.preventDefault();
+            const file = input.files[0];
+            // determine content type from form action path
+            const action = form.getAttribute('action') || '';
+            let contentType = 'video';
+            if (action.indexOf('/upload/presentation') !== -1 || input.accept && input.accept.indexOf('.ppt') !== -1) {
+                contentType = 'presentation';
+            }
+
+            // Start progress UI
+            const topProgress = document.getElementById('topProgress');
+            topProgress.style.transition = 'width 120ms linear';
+            const onProgress = (uploaded, total) => {
+                const pct = Math.floor((uploaded / total) * 100);
+                topProgress.style.width = pct + '%';
+            };
+
+            try {
+                await uploadFileInChunks(file, contentType, onProgress);
+                // finish progress and reload page so server shows the new file
+                topProgress.style.width = '100%';
+                setTimeout(() => { location.reload(); }, 400);
+            } catch (err) {
+                alert('Upload failed. Falling back to normal upload. Please try again.');
+                // reset progress and allow normal submit as fallback
+                topProgress.style.width = '0%';
+                // Optionally submit the form normally as fallback (commented out to avoid double-uploads)
+                // form.submit();
+            }
+        });
+    });
+})();
+</script>
+</body>
+</html>
