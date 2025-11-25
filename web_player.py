@@ -64,7 +64,18 @@ def get_playlist():
         if PLAYLIST_JSON.exists():
             data = json.loads(PLAYLIST_JSON.read_text())
             if isinstance(data, list):
-                selected = data
+                # normalize to list of objects with repeats
+                for entry in data:
+                    if isinstance(entry, str):
+                        selected.append({'name': entry, 'repeats': 1})
+                    elif isinstance(entry, dict):
+                        name = entry.get('name') or entry.get('filename')
+                        try:
+                            repeats = int(entry.get('repeats', 1))
+                        except Exception:
+                            repeats = 1
+                        if name:
+                            selected.append({'name': name, 'repeats': max(1, repeats)})
     except Exception:
         logger.exception('Failed to read playlist.json')
 
@@ -73,26 +84,32 @@ def get_playlist():
     # slides are stored under SLIDES_CACHE_DIR/<presentation_stem>/slide_*.png
     if selected:
         logger.info(f"Using JSON playlist with {len(selected)} entries (web player)")
-        for name in selected:
+        for entry in selected:
+            name = entry.get('name')
+            repeats = entry.get('repeats', 1)
+            if not name:
+                continue
             if name in video_files and mode in ('both', 'video'):
-                playlist.append({
-                    'type': 'video',
-                    'url': f'/content/videos/{video_files[name].name}',
-                    'name': video_files[name].name
-                })
+                for _ in range(repeats):
+                    playlist.append({
+                        'type': 'video',
+                        'url': f'/content/videos/{video_files[name].name}',
+                        'name': video_files[name].name
+                    })
             else:
                 # treat as presentation filename; expand to slides by stem
                 stem = Path(name).stem
                 pres_dir = SLIDES_CACHE_DIR / stem
                 if pres_dir.exists() and pres_dir.is_dir() and mode in ('both', 'presentation'):
-                    for slide in sorted(pres_dir.glob('slide_*.png')):
-                        rel = slide.relative_to(SLIDES_CACHE_DIR)
-                        playlist.append({
-                            'type': 'image',
-                            'url': f'/content/slides/{rel.as_posix()}',
-                            'name': slide.name,
-                            'duration': SLIDE_DURATION
-                        })
+                    for _ in range(repeats):
+                        for slide in sorted(pres_dir.glob('slide_*.png')):
+                            rel = slide.relative_to(SLIDES_CACHE_DIR)
+                            playlist.append({
+                                'type': 'image',
+                                'url': f'/content/slides/{rel.as_posix()}',
+                                'name': slide.name,
+                                'duration': SLIDE_DURATION
+                            })
     else:
         for video in get_video_files():
             if mode in ('both', 'video'):

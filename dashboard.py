@@ -126,6 +126,44 @@ def write_playlist(lst):
         return False
 
 
+def normalize_playlist_to_objects(raw):
+    """Return playlist as list of objects: {'name':..., 'repeats': int}
+    Accepts legacy list of strings or list of objects and returns normalized list.
+    """
+    out = []
+    if not raw:
+        return out
+    if isinstance(raw, list):
+        for item in raw:
+            if isinstance(item, str):
+                out.append({'name': item, 'repeats': 1})
+            elif isinstance(item, dict):
+                name = item.get('name') or item.get('filename')
+                try:
+                    repeats = int(item.get('repeats', 1))
+                except Exception:
+                    repeats = 1
+                if name:
+                    out.append({'name': name, 'repeats': max(1, repeats)})
+    return out
+
+
+def playlist_names_set(raw):
+    """Return a set of playlist filenames regardless of format."""
+    s = set()
+    if not raw:
+        return s
+    if isinstance(raw, list):
+        for item in raw:
+            if isinstance(item, str):
+                s.add(item)
+            elif isinstance(item, dict):
+                n = item.get('name') or item.get('filename')
+                if n:
+                    s.add(n)
+    return s
+
+
 def write_config(cfg: dict):
     try:
         CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -370,6 +408,7 @@ def dashboard():
     videos = []
     presentations = []
     playlist = read_playlist()
+    playlist_set = playlist_names_set(playlist)
     
     try:
         VIDEOS_DIR.mkdir(parents=True, exist_ok=True)
@@ -383,7 +422,7 @@ def dashboard():
                         'size': get_file_size(file),
                         'type': 'video',
                         'format': get_file_format(file),
-                        'in_playlist': file.name in playlist
+                        'in_playlist': file.name in playlist_set
                     })
         
         if PRESENTATIONS_DIR.exists():
@@ -394,7 +433,7 @@ def dashboard():
                         'size': get_file_size(file),
                         'type': 'presentation',
                         'format': get_file_format(file),
-                        'in_playlist': file.name in playlist
+                        'in_playlist': file.name in playlist_set
                     })
         
     except Exception as e:
@@ -413,7 +452,8 @@ def dashboard():
                         mode=cfg.get('mode', 'both'),
                         web_running=web_running,
                         signage_running=signage_running,
-                        playlist=playlist)
+                        playlist=playlist,
+                        playlist_set=playlist_set)
 
 
 @app.route('/control/toggle_playlist/<content_type>/<filename>', methods=['POST'])
@@ -424,15 +464,25 @@ def toggle_playlist(content_type, filename):
         return jsonify({'ok': False, 'error': 'invalid content type'}), 400
     
     try:
-        playlist = read_playlist()
-        if filename in playlist:
-            playlist.remove(filename)
+        raw = read_playlist()
+        items = normalize_playlist_to_objects(raw)
+
+        # Check if filename present
+        found = None
+        for it in items:
+            if it.get('name') == filename:
+                found = it
+                break
+
+        if found:
+            # remove all entries matching this name
+            items = [it for it in items if it.get('name') != filename]
             in_playlist = False
         else:
-            playlist.append(filename)
+            items.append({'name': filename, 'repeats': 1})
             in_playlist = True
-        
-        ok = write_playlist(playlist)
+
+        ok = write_playlist(items)
         if ok:
             return jsonify({'ok': True, 'in_playlist': in_playlist, 'filename': filename})
         else:
@@ -455,6 +505,52 @@ def set_mode():
     else:
         flash('Failed to save mode', 'error')
     return redirect(url_for('dashboard'))
+
+
+@app.route('/api/playlist_order', methods=['GET'])
+@login_required
+def api_playlist_order_get():
+    """Return normalized playlist (ordered) as list of objects {name, repeats}."""
+    try:
+        raw = read_playlist()
+        items = normalize_playlist_to_objects(raw)
+        return jsonify({'ok': True, 'playlist': items})
+    except Exception:
+        logger.exception('Failed to return playlist order')
+        return jsonify({'ok': False, 'error': 'server error'}), 500
+
+
+@app.route('/api/playlist_order', methods=['POST'])
+@login_required
+def api_playlist_order_post():
+    """Accept a JSON array of objects {name, repeats} and save as the playlist order."""
+    try:
+        data = request.get_json()
+        if not isinstance(data, list):
+            return jsonify({'ok': False, 'error': 'expected a JSON array'}), 400
+
+        normalized = []
+        for entry in data:
+            if isinstance(entry, str):
+                normalized.append({'name': entry, 'repeats': 1})
+            elif isinstance(entry, dict):
+                name = entry.get('name')
+                if not name:
+                    continue
+                try:
+                    repeats = int(entry.get('repeats', 1))
+                except Exception:
+                    repeats = 1
+                normalized.append({'name': name, 'repeats': max(1, repeats)})
+
+        ok = write_playlist(normalized)
+        if ok:
+            return jsonify({'ok': True, 'playlist': normalized})
+        else:
+            return jsonify({'ok': False, 'error': 'failed to save'}), 500
+    except Exception:
+        logger.exception('Failed to save playlist order')
+        return jsonify({'ok': False, 'error': 'server error'}), 500
 
 
 @app.route('/control/start_web_player', methods=['POST'])

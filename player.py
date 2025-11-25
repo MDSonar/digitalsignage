@@ -162,14 +162,26 @@ class SmartPlaylistPlayer:
         except Exception:
             mode = 'both'
 
-        # If a JSON playlist exists and contains filenames, honor it (keeps unselected items in storage)
+        # If a JSON playlist exists, honor it. Support legacy list-of-strings and
+        # the new list-of-objects format: [{'name':..., 'repeats': n}, ...]
         selected = []
         try:
             if os.path.exists(PLAYLIST_JSON):
                 with open(PLAYLIST_JSON, 'r') as pf:
                     data = json.load(pf)
                     if isinstance(data, list):
-                        selected = data
+                        # normalize to list of objects
+                        for entry in data:
+                            if isinstance(entry, str):
+                                selected.append({'name': entry, 'repeats': 1})
+                            elif isinstance(entry, dict):
+                                name = entry.get('name') or entry.get('filename')
+                                try:
+                                    repeats = int(entry.get('repeats', 1))
+                                except Exception:
+                                    repeats = 1
+                                if name:
+                                    selected.append({'name': name, 'repeats': max(1, repeats)})
         except Exception as e:
             logger.warning(f"Failed to read playlist json: {e}")
 
@@ -183,15 +195,21 @@ class SmartPlaylistPlayer:
 
         if selected:
             logger.info(f"Using JSON playlist with {len(selected)} entries")
-            for name in selected:
+            for entry in selected:
+                name = entry.get('name')
+                repeats = entry.get('repeats', 1)
+                if not name:
+                    continue
                 # prefer video if exists
                 if name in video_map and mode in ('both', 'video'):
-                    playlist_items.append({'type': 'video', 'path': video_map[name], 'duration': -1})
+                    for _ in range(repeats):
+                        playlist_items.append({'type': 'video', 'path': video_map[name], 'duration': -1})
                 elif name in pres_map and mode in ('both', 'presentation'):
                     slides = self.presentation_converter.get_slides(pres_map[name])
-                    for slide in slides:
-                        playlist_items.append({'type': 'slide', 'path': slide, 'duration': SLIDE_DURATION})
-                        total_slides += 1
+                    for _ in range(repeats):
+                        for slide in slides:
+                            playlist_items.append({'type': 'slide', 'path': slide, 'duration': SLIDE_DURATION})
+                            total_slides += 1
                 else:
                     logger.debug(f"Playlist entry not found or excluded by mode: {name}")
             logger.info(f"Added {len([i for i in playlist_items if i['type']=='video'])} videos and {total_slides} slides from playlist.json")
