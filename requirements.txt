@@ -1,0 +1,19 @@
+# Litmus Digital Signage - Python Dependencies
+# Flask Web Framework
+Flask==2.3.0
+Werkzeug==2.3.0
+Jinja2==3.1.2
+MarkupSafe==2.1.1
+
+# WSGI Server
+gunicorn==21.2.0
+
+# System Monitoring
+psutil==5.9.5
+
+# Presentation Processing
+python-pptx==0.6.23
+Pillow==10.0.0
+
+# Optional but recommended
+python-dotenv==1.0.0
